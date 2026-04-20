@@ -67,6 +67,22 @@ p1 + p2
 
 Mfull=M
 M <- subset(x = M, subset = nFeature_RNA > nFeature_min & nFeature_RNA < nFeature_max & percent.mito < percent.mito_max)
+M <- NormalizeData(object = M, normalization.method = "LogNormalize")
+M <- FindVariableFeatures(object=M, selection.method = 'vst')
+all.genes <- rownames(M)
+M <- ScaleData(M, features = all.genes)
+M <- RunPCA(object = M, features = VariableFeatures(object = M), verbose = FALSE)
+
+DimPlot(object = M)
+M <- RunUMAP(M, dims = 1:30)
+M <- FindNeighbors(M, reduction = "pca", dims = 1:30)
+M <- FindClusters(M, resolution = c(8.5), verbose=T)
+DimPlot(M, label = FALSE)
+
+markers <- FindAllMarkers(M, only.pos=T, min.pct=0.25, logfc.threshold=0.25, assay='RNA')
+clustered_markers <- markers %>% group_by(cluster)
+topN_markers <- clustered_markers %>% top_n(n = 30, wt = avg_log2FC)
+write.table(clustered_markers, file="/XXX/WholeDatasetMarkers.tsv", sep="\t", quote=FALSE)
 
 gill <- M
 
