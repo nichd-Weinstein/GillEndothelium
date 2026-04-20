@@ -9,6 +9,66 @@ library(SeuratObject)
 library(SingleCellExperiment)
 library(leiden)
 
+nFeature_min=200
+nFeature_max=6000
+percent.mito_max=10
+
+lambda=c(gill=4500)/1e5 
+
+data <- Read10X(
+  data.dir=c(
+    gill="/XXX/filtered_feature_bc_matrix"
+  ),
+  strip.suffix=T
+)
+
+M <- CreateSeuratObject(counts=data, min.cells=0, project="gill")
+
+M$scDblFinder.score=NA
+M$scDblFinder.class=NA
+
+doubletRate = (1-lambda/(exp(lambda)-1))/2 
+for(oi in unique(M$orig.ident)) {
+  stopifnot(oi %in% names(doubletRate))
+  
+  i = which(M$orig.ident == oi)
+  obj = M[,i]
+  
+
+  if(packageVersion('Seurat') >= '5.0.0') {
+    sce <- SingleCellExperiment( list(counts=obj[["RNA"]]$counts) )
+  } else {
+    sce <- SingleCellExperiment( list(counts=obj@assays$RNA@counts) ) # or obj[["RNA"]]@counts
+  }
+  sce <- scDblFinder(sce, dbr=doubletRate[oi], verbose=T)
+  #hist(colData(sce)$scDblFinder.score)
+  stopifnot(identical(rownames(colData(sce)),rownames(obj@meta.data)))
+  #obj@meta.data = cbind(obj@meta.data, colData(sce)[c('scDblFinder.score','scDblFinder.class')])
+  M$scDblFinder.score[i] = colData(sce)$scDblFinder.score
+  M$scDblFinder.class[i] = as.character(colData(sce)$scDblFinder.class)
+}
+rm(obj, sce, i, oi)
+
+
+# remove called doublets
+stopifnot(setequal(c('doublet','singlet'), unique(M$scDblFinder.class)))
+M = subset(M, scDblFinder.class == 'singlet')
+knitr::kable(table(Sample=M$orig.ident), caption='Cell counts after called doublet removal')
+
+M[["percent.mito"]] <- PercentageFeatureSet(M, pattern = "^mt-")
+
+M[["percent.rpl"]] <- PercentageFeatureSet(M, pattern = "^rpl")
+
+VlnPlot(object= M, features = c("nFeature_RNA", "nCount_RNA", "percent.mito", "percent.rpl"), ncol=2, log=T, pt.size=0.05)
+
+p1 = FeatureScatter(object = M, feature1= "nCount_RNA", feature2 = "nFeature_RNA")
+p2 = FeatureScatter(object = M, feature1= "nCount_RNA", feature2= "percent.mito")
+p1 + p2
+
+Mfull=M
+M <- subset(x = M, subset = nFeature_RNA > nFeature_min & nFeature_RNA < nFeature_max & percent.mito < percent.mito_max)
+
+saveRDS(gill, file="/XXX.rds")
 gill <- readRDS("/XXX.rds")
 
 DimPlot(gill, label = TRUE, pt.size = 0.05)
