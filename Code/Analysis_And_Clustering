@@ -68,6 +68,8 @@ p1 + p2
 Mfull=M
 M <- subset(x = M, subset = nFeature_RNA > nFeature_min & nFeature_RNA < nFeature_max & percent.mito < percent.mito_max)
 
+gill <- M
+
 saveRDS(gill, file="/XXX.rds")
 gill <- readRDS("/XXX.rds")
 
